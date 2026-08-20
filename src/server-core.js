@@ -5,10 +5,13 @@
  * standalone (src/server.js) or as a DSH plugin (lib/index.js).
  */
 
-require('dotenv').config();
+const path = require('path');
+
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const pkg = require('../package.json');
 const auth = require('./auth');
 const traeClient = require('./trae-client');
 const { handleOpenAIResponse } = require('./openai-format');
@@ -470,7 +473,10 @@ function startServer(options = {}) {
   app.use(express.json({ limit: '10mb' }));
 
   const PORT = parseInt(options.port || process.env.PORT || '9220', 10);
-  const API_KEY = options.apiKey || process.env.API_KEY || '';
+  const HOST = process.env.HOST || '127.0.0.1';
+  const rawApiKey = options.apiKey !== undefined ? options.apiKey : (process.env.API_KEY ?? '');
+  const API_KEY = rawApiKey === '' ? 'trae-local-api' : rawApiKey;
+  const AUTH_ENABLED = String(API_KEY).toLowerCase() !== 'none';
   const EDITION = (options.edition || process.env.TRAE_EDITION || 'cn').toLowerCase();
   const MANUAL_TOKEN = options.manualToken || process.env.TRAE_MANUAL_TOKEN || '';
 
@@ -478,7 +484,7 @@ function startServer(options = {}) {
   let effectiveEdition = EDITION;
 
   function requireAuth(req, res, next) {
-    if (!API_KEY) return next();
+    if (!AUTH_ENABLED) return next();
     const authHeader = req.headers.authorization || '';
     const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
     const xApiKey = req.headers['x-api-key'] || '';
@@ -491,9 +497,13 @@ function startServer(options = {}) {
 
   app.use((req, res, next) => {
     console.log(`[server] ${req.method} ${req.path}`);
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', '*');
+    const origin = req.headers.origin || '';
+    if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.header('Access-Control-Allow-Headers', '*');
+    }
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -504,6 +514,7 @@ function startServer(options = {}) {
       edition: effectiveEdition,
       base_url: BASE_URL,
       has_token: !!auth.getToken(),
+      host: HOST,
       port: PORT,
     });
   });
@@ -675,19 +686,16 @@ function startServer(options = {}) {
     BASE_URL = DEFAULT_BASE_URLS[effectiveEdition] || DEFAULT_BASE_URLS.cn;
   }
 
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, HOST, () => {
     if (!options.quiet) {
       console.log('');
-      console.log('╔══════════════════════════════════════════╗');
-      console.log('║       Trae Local API Server v1.0.0       ║');
-      console.log('║   Trae Work CN -> OpenAI/Anthropic Proxy ║');
-      console.log('╚══════════════════════════════════════════╝');
+      console.log(`=== Trae Local API Server v${pkg.version} ===`);
       console.log('');
     }
-    console.log(`[server] Running on http://localhost:${PORT}`);
+    console.log(`[server] Running on http://${HOST}:${PORT}`);
     console.log(`[server] Edition: ${effectiveEdition.toUpperCase()}`);
     console.log(`[server] Base URL: ${BASE_URL}`);
-    console.log(`[server] API Key: ${API_KEY ? '***' : '(not set - open access)'}`);
+    console.log(`[server] API Key: ${AUTH_ENABLED ? '***' : '(auth disabled)'}`);
     console.log(`[server] Auth: ${authOk ? 'OK' : 'FAILED'}`);
     if (!options.quiet) {
       console.log('');
@@ -700,7 +708,15 @@ function startServer(options = {}) {
     }
   });
 
-  return { app, server, port: PORT, edition: effectiveEdition, baseUrl: BASE_URL, authOk };
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[server] Port ${PORT} is already in use — stop the other process or set PORT.`);
+    } else {
+      console.error(`[server] Server error: ${err.message}`);
+    }
+  });
+
+  return { app, server, port: PORT, host: HOST, edition: effectiveEdition, baseUrl: BASE_URL, authOk };
 }
 
 module.exports = { startServer, DEFAULT_BASE_URLS };

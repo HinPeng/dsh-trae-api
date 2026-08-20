@@ -1,6 +1,6 @@
 {
   "name": "dsh-trae-api",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "DSH plugin: expose Trae Work CN credits as a local OpenAI/Anthropic compatible API for Claude Code, Cursor, Cline and other agents",
   "type": "module",
   "main": "lib/index.js",
@@ -38,6 +38,14 @@
     "access": "public"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Wang-JQ77/dsh-trae-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wang-JQ77/dsh-trae-api/issues"
+  },
+  "homepage": "https://github.com/Wang-JQ77/dsh-trae-api#readme",
   "keywords": [
     "dsh",
     "dsh-plugin",

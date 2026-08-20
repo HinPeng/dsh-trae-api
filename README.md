@@ -1,8 +1,8 @@
-# Trae Local API (dsh-trae-api)
+# dsh-trae-api (Trae Local API)
 
 将 Trae Work CN 的**积分/额度**转化为本地 OpenAI/Anthropic 兼容 API 服务，让 Claude Code、Cursor、Cline、Windsurf 等第三方 AI 编程工具直接调用 Trae 底层模型（GLM、DeepSeek、Qwen、Kimi、MiniMax 等）。
 
-本项目同时是一个 **DeepSeek Harness (DSH) 插件**（npm 包名 `dsh-trae-api`），安装后随 `dsh` 启动自动运行代理服务；也可以独立运行。
+本项目是一个 **DeepSeek Harness (DSH) 插件**（npm 包名 `dsh-trae-api`），安装后随 `dsh` 启动自动运行代理服务；也可以独立运行。
 
 ## 原理
 
@@ -177,8 +177,9 @@ for chunk in response:
 | `TRAE_REFRESH_TOKEN` | 刷新用 Token | (自动生成) |
 | `TRAE_USER_ID` | 用户 ID | (自动生成) |
 | `TRAE_API_HOST` | Token 刷新服务地址 | (自动设置) |
-| `API_KEY` | 本服务的 API Key | trae-local-api |
+| `API_KEY` | 本服务的 API Key（设为 `none` 可禁用鉴权，不推荐） | trae-local-api |
 | `PORT` | 监听端口 | 9220 |
+| `HOST` | 监听地址（`0.0.0.0` 开放局域网，需自担风险） | 127.0.0.1 |
 | `BASE_URL` | 上游 API 地址 | (按版本自动设置) |
 | `MAX_CONTEXT_TOKENS` | 最大上下文 Token 数 | 200000 |
 | `TRAE_MANUAL_TOKEN` | 手动指定 Token (备用) | (空) |
@@ -194,7 +195,7 @@ npm run setup
 ## 项目结构
 
 ```
-trae-local-api/
+dsh-trae-api/
 ├── lib/
 │   └── index.js           # DSH 插件入口 (ESM, export name + apply)
 ├── cordis.patch.yml       # DSH bundle patch (挂载到 loader)
@@ -218,9 +219,11 @@ trae-local-api/
 ## 注意事项
 
 - 本工具仅在你**已经拥有 Trae 积分**的情况下有效，本质上是将 Trae 的 API 额度通过本地代理暴露为标准接口
-- 本服务仅在本地监听，不会暴露到公网
+- 默认仅监听 `127.0.0.1`，局域网与公网无法访问；如需开放给局域网设备，设置 `HOST=0.0.0.0`（请同时设置强 API_KEY）
+- 默认启用 API Key 鉴权（默认值 `trae-local-api`，建议修改）；设置 `API_KEY=none` 可禁用鉴权，不推荐
+- CORS 仅允许 `localhost` 来源的浏览器跨域请求，第三方网页无法盗刷积分
+- Token 过期会自动刷新并回写 `.env`；`BASE_URL`、`MAX_CONTEXT_TOKENS` 等自定义配置会被保留
 - 请勿将 `.env` 文件提交到版本控制（已在 `.gitignore` 中忽略）
-- 如果 Token 过期，服务会自动刷新，无需手动干预
 
 ## 免责声明
 
