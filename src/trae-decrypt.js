@@ -146,22 +146,22 @@ function decryptAuthData(dataDir) {
 }
 
 function getTraeCNDataDir() {
-  const appData = process.env.APPDATA || path.join(process.env.HOME, 'AppData', 'Roaming');
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(require('os').homedir(), 'Library', 'Application Support') : path.join(require('os').homedir(), 'AppData', 'Roaming'));
   return path.join(appData, 'Trae CN', 'User');
 }
 
 function getTraeSGDataDir() {
-  const appData = process.env.APPDATA || path.join(process.env.HOME, 'AppData', 'Roaming');
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(require('os').homedir(), 'Library', 'Application Support') : path.join(require('os').homedir(), 'AppData', 'Roaming'));
   return path.join(appData, 'Trae', 'User');
 }
 
 function getTraeSoloCNDataDir() {
-  const appData = process.env.APPDATA || path.join(process.env.HOME, 'AppData', 'Roaming');
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(require('os').homedir(), 'Library', 'Application Support') : path.join(require('os').homedir(), 'AppData', 'Roaming'));
   return path.join(appData, 'TRAE SOLO CN', 'User');
 }
 
 function getTraeSoloSGDataDir() {
-  const appData = process.env.APPDATA || path.join(process.env.HOME, 'AppData', 'Roaming');
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(require('os').homedir(), 'Library', 'Application Support') : path.join(require('os').homedir(), 'AppData', 'Roaming'));
   return path.join(appData, 'TRAE SOLO', 'User');
 }
 

@@ -30,7 +30,7 @@ if exist ".env" (
 :: No valid .env, run setup first (auto-detects 4 editions)
 echo [info] First run, decrypting Trae config...
 echo.
-node setup.js
+node setup.cjs
 if %errorlevel% neq 0 (
     echo.
     echo [error] Setup failed! Make sure any Trae IDE is installed and logged in.

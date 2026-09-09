@@ -124,7 +124,8 @@ const envContent = [
   '',
 ].join('\n');
 
-fs.writeFileSync(ENV_PATH, envContent, 'utf8');
+fs.writeFileSync(ENV_PATH, envContent, { encoding: 'utf8', mode: 0o600 });
+fs.chmodSync(ENV_PATH, 0o600);
 
 console.log('');
 console.log('=== Setup Complete ===');
@@ -133,7 +134,6 @@ console.log(`Edition:        ${edition.toUpperCase()}`);
 console.log(`UserID:         ${authData.userId}`);
 console.log(`Username:       ${authData.account?.username || 'N/A'}`);
 console.log(`Region:         ${authData.userRegion?.region || 'N/A'}`);
-console.log(`Token:          ${authData.token ? authData.token.substring(0, 40) + '...' : 'N/A'}`);
 console.log(`Token Expiry:   ${authData.expiredAt || 'N/A'}`);
 console.log(`Refresh Expiry: ${authData.refreshExpiredAt || 'N/A'}`);
 console.log(`API Host:       ${apiHost}`);

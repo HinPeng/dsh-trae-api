@@ -38,6 +38,7 @@ function mapUpstreamStatus(status) {
 }
 
 function sendAnthropicError(res, httpStatus, errorType, message) {
+  if (res.headersSent) { res.write(`event: error\ndata: ${JSON.stringify(buildAnthropicError(errorType, message))}\n\n`); return res.end(); }
   return res.status(httpStatus).json(buildAnthropicError(errorType, message));
 }
 
@@ -481,7 +482,9 @@ function startServer(options = {}) {
   const MANUAL_TOKEN = options.manualToken || process.env.TRAE_MANUAL_TOKEN || '';
 
   let BASE_URL = options.baseUrl || process.env.BASE_URL || DEFAULT_BASE_URLS[EDITION] || DEFAULT_BASE_URLS.cn;
-  let effectiveEdition = EDITION;
+  const enterprise = process.env.TRAE_BACKEND === 'enterprise-cli';
+  if (enterprise) BASE_URL = require('./enterprise-client').BASE_URL;
+  let effectiveEdition = enterprise ? 'enterprise-cli' : EDITION;
 
   function requireAuth(req, res, next) {
     if (!AUTH_ENABLED) return next();
@@ -513,7 +516,7 @@ function startServer(options = {}) {
       status: 'ok',
       edition: effectiveEdition,
       base_url: BASE_URL,
-      has_token: !!auth.getToken(),
+      has_token: enterprise ? authOk : !!auth.getToken(),
       host: HOST,
       port: PORT,
     });
@@ -595,8 +598,7 @@ function startServer(options = {}) {
     for (let i = 0; i < converted.length; i++) {
       const m = converted[i];
       const len = typeof m.content === 'string' ? m.content.length : 0;
-      const preview = typeof m.content === 'string' ? m.content.substring(0, 80).replace(/\n/g, '\\n') : '';
-      console.log(`[server]   out[${i}] role=${m.role}, len=${len}, preview=${preview}`);
+      console.log(`[server]   out[${i}] role=${m.role}, len=${len}`);
     }
 
     const inputTokens = estimateInputTokens(system, messages, tools);
@@ -673,7 +675,8 @@ function startServer(options = {}) {
   // Initialize auth (tolerate failure — caller decides whether to exit)
   let authOk = false;
   try {
-    auth.initAuth(EDITION, MANUAL_TOKEN);
+    if (enterprise) require('./enterprise-client').readAuth();
+    else auth.initAuth(EDITION, MANUAL_TOKEN);
     authOk = true;
   } catch (err) {
     console.error(`[server] Auth initialization failed: ${err.message}`);
@@ -681,7 +684,7 @@ function startServer(options = {}) {
   }
 
   // auth.initAuth may auto-detect a different edition — sync BASE_URL accordingly
-  if (!options.baseUrl && !process.env.BASE_URL) {
+  if (!enterprise && !options.baseUrl && !process.env.BASE_URL) {
     effectiveEdition = (process.env.TRAE_EDITION || EDITION).toLowerCase();
     BASE_URL = DEFAULT_BASE_URLS[effectiveEdition] || DEFAULT_BASE_URLS.cn;
   }

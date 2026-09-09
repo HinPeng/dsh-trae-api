@@ -178,6 +178,7 @@ function buildChatBody(messages, model, stream, options) {
 }
 
 async function sendChatRequest(messages, model, stream, baseUrl, options) {
+  if (process.env.TRAE_BACKEND === 'enterprise-cli') return require('./enterprise-client').sendChatRequest(messages, model, stream, baseUrl, options);
   const token = auth.getToken();
   const userId = auth.getUserId();
 
@@ -243,6 +244,7 @@ async function sendChatRequest(messages, model, stream, baseUrl, options) {
 }
 
 async function getModels(baseUrl) {
+  if (process.env.TRAE_BACKEND === 'enterprise-cli') return require('./enterprise-client').getModels();
   const allModels = [];
   for (const [tier, models] of Object.entries(MODEL_TIERS)) {
     for (const m of models) {
