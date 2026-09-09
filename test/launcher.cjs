@@ -13,11 +13,11 @@ test('launcher overrides settings gateway, credentials and every model alias',()
  assert.throws(()=>overrides({API_KEY:'none'}));
 });
 const {resolveModel, parseArgs, MODELS}=require('../scripts/claude-trae.cjs');
-test('four explicit models; DeepSeek short names resolve only to official variants',()=>{
+test('four explicit models; DeepSeek non-official configs are available',()=>{
  assert.equal(MODELS.length,4);
  assert.equal(resolveModel('GLM-5.3'),'glm-5.3');
- assert.equal(resolveModel('DeepSeek-V4-Flash'),'DeepSeek-V4-Flash-Official');
- assert.equal(resolveModel('DeepSeek-V4-Pro'),'DeepSeek-V4-Pro-Official');
+ assert.equal(resolveModel('DeepSeek-V4-Flash'),'DeepSeek-V4-Flash');
+ assert.equal(resolveModel('DeepSeek-V4-Pro'),'DeepSeek-V4-Pro');
  assert.throws(()=>resolveModel('DeepSeek-V3-Pro'));
 });
 test('model flag selects initial model but leaves all four menu options distinct',()=>{

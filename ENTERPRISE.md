@@ -72,21 +72,21 @@ smoke-test calls still succeeded on `glm-5.3-flash`.
 ## Four-model launcher selection
 
 Context settings remain unchanged. The default is still `glm-5.3-flash`.
-Both DeepSeek choices below use the enterprise **Official** configurations.
+Both DeepSeek choices below use their non-official configurations.
 
 ```sh
 /Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --list-models
 /Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model GLM-5.3-Flash
 /Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model GLM-5.3
-/Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model DeepSeek-V4-Flash-Official
-/Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model DeepSeek-V4-Pro-Official
+/Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model DeepSeek-V4-Flash
+/Users/hp/workspace/tools/dsh-trae-api/scripts/claude-trae --model DeepSeek-V4-Pro
 ```
 
 Run without arguments and enter `/model` in the session to select:
 - GLM-5.3-Flash
 - GLM-5.3
-- DeepSeek-V4-Flash 正式版
-- DeepSeek-V4-Pro 正式版
+- DeepSeek-V4-Flash
+- DeepSeek-V4-Pro
 
 Claude's built-in Default entry may also be displayed; it is not an additional
 upstream model. The four choices are implemented by independent built-in alias
@@ -96,7 +96,7 @@ disabled; no context limit is increased. Fast auxiliary requests use GLM-5.3-Fla
 subagents are no longer pinned to the startup model by this launcher.
 
 `--model` optionally chooses only the initial model. Menu mappings stay distinct
-regardless of that argument. Short DeepSeek names resolve to Official on startup.
+regardless of that argument. DeepSeek startup uses the non-official configurations.
 Use the `s` shortcut in the picker for a session-only change; Enter follows Claude's
 normal save-default behavior. The launcher itself does not edit global settings.
 

@@ -7,8 +7,8 @@ const {spawn} = require('child_process');
 const MODELS = [
   {id: 'glm-5.3-flash', name: 'GLM-5.3-Flash', tier: 'HAIKU'},
   {id: 'glm-5.3', name: 'GLM-5.3', tier: 'SONNET'},
-  {id: 'DeepSeek-V4-Flash-Official', name: 'DeepSeek-V4-Flash 正式版', tier: 'FABLE'},
-  {id: 'DeepSeek-V4-Pro-Official', name: 'DeepSeek-V4-Pro 正式版', tier: 'OPUS'},
+  {id: 'DeepSeek-V4-Flash', name: 'DeepSeek-V4-Flash', tier: 'FABLE'},
+  {id: 'DeepSeek-V4-Pro', name: 'DeepSeek-V4-Pro', tier: 'OPUS'},
 ];
 function resolveModel(name) {
   const normalized = name.toLowerCase();
