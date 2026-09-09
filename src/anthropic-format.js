@@ -11,31 +11,53 @@
 
 const { v4: uuidv4 } = require('uuid');
 
-const OPEN_TAG = '[[TOOL_CALL]]';
-const CLOSE_TAG = '[[/TOOL_CALL]]';
+const TOOL_MARKERS = [
+  { open: '[[TOOL_CALL]]', close: '[[/TOOL_CALL]]' },
+  { open: '<tool_call>', close: '</tool_call>' },
+];
+const OPEN_TAG = TOOL_MARKERS[0].open;
+const CLOSE_TAG = TOOL_MARKERS[0].close;
 
-function estimateTokens(text) {
-    if (!text) return 0;
-    let tokens = 0;
-    for (const ch of text) {
-        const code = ch.charCodeAt(0);
-        if (code > 0x2000) tokens += 1.5;
-        else tokens += 0.25;
-    }
-    return Math.ceil(tokens);
+function decodeXmlText(value) {
+    return value
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+        .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+        .replace(/&amp;/g, '&');
 }
 
 function normalizeToolCallPayload(raw) {
+    const text = String(raw).trim();
+
     try {
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(text);
         if (parsed && typeof parsed.name === 'string') {
             return { name: parsed.name, input: parsed.arguments || parsed.input || parsed.parameters || {} };
         }
     } catch {}
 
+    // Models sometimes ignore the requested [[TOOL_CALL]] format and emit an
+    // XML-like tool call with arg_key/arg_value pairs. Claude Code does not
+    // execute that syntax, so normalize it to a native tool_use block.
+    if (/<arg_key>[\s\S]*<\/arg_key>/.test(text)) {
+        const nameMatch = text.match(/^([\w.-]+)\s*(?:<|>|[\[{])/);
+        const input = {};
+        const argPattern = /<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
+        let argMatch;
+        while ((argMatch = argPattern.exec(text)) !== null) {
+            input[decodeXmlText(argMatch[1].trim())] = decodeXmlText(argMatch[2]);
+        }
+        if (nameMatch && Object.keys(input).length > 0) {
+            return { name: nameMatch[1], input };
+        }
+    }
+
     // Some models output `{"ToolName"}` followed by an arguments object.
     // Normalize both common variants before giving up.
-    const compact = raw.replace(/\s+/g, ' ').trim();
+    const compact = text.replace(/\s+/g, ' ').trim();
     const match = compact.match(/^\{\s*"([^"]+)"\s*\}\s*(\{[\s\S]*\})$/);
     if (match) {
         try {
@@ -66,22 +88,32 @@ function normalizeToolCallPayload(raw) {
 
 function parseToolCalls(text) {
     const result = [];
-    const regex = /\[\[TOOL_CALL\]\]\s*([\s\S]*?)\s*\[\[\/TOOL_CALL\]\]/g;
-    let lastIndex = 0;
-    let match;
+    const patterns = TOOL_MARKERS.map(marker => ({
+        marker,
+        regex: new RegExp(`${marker.open.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*([\\s\\S]*?)\\s*${marker.close.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'),
+    }));
+    const matches = [];
+    for (const {marker, regex} of patterns) {
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            matches.push({ index: match.index, end: regex.lastIndex, marker, payload: match[1] });
+        }
+    }
+    matches.sort((a, b) => a.index - b.index || a.end - b.end);
 
-    while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
+    let lastIndex = 0;
+    for (const match of matches) {
+        if (match.index >= lastIndex) {
             const before = text.substring(lastIndex, match.index);
             if (before.trim()) result.push({ type: 'text', text: before });
+            const parsed = normalizeToolCallPayload(match.payload);
+            if (parsed) {
+                result.push({ type: 'tool_use', name: parsed.name, input: parsed.input });
+            } else {
+                result.push({ type: 'text', text: text.substring(match.index, match.end) });
+            }
+            lastIndex = match.end;
         }
-        const parsed = normalizeToolCallPayload(match[1]);
-        if (parsed) {
-            result.push({ type: 'tool_use', name: parsed.name, input: parsed.input });
-        } else {
-            result.push({ type: 'text', text: match[0] });
-        }
-        lastIndex = regex.lastIndex;
     }
 
     if (lastIndex < text.length) {
@@ -95,7 +127,7 @@ function parseToolCalls(text) {
 class StreamingToolCallParser {
     constructor() {
         this.buffer = '';
-        this.inToolCall = false;
+        this.marker = null;
     }
 
     push(chunk) {
@@ -106,43 +138,52 @@ class StreamingToolCallParser {
         const blocks = [];
 
         while (true) {
-            if (this.inToolCall) {
-                const endIdx = this.buffer.indexOf(CLOSE_TAG);
+            if (this.marker) {
+                const endIdx = this.buffer.indexOf(this.marker.close);
                 if (endIdx === -1) break;
-                const jsonStr = this.buffer.substring(0, endIdx).trim();
-                this.buffer = this.buffer.substring(endIdx + CLOSE_TAG.length);
-                const parsed = normalizeToolCallPayload(jsonStr);
+                const payload = this.buffer.substring(0, endIdx).trim();
+                this.buffer = this.buffer.substring(endIdx + this.marker.close.length);
+                const parsed = normalizeToolCallPayload(payload);
                 if (parsed) {
                     blocks.push({ type: 'tool_use', name: parsed.name, input: parsed.input });
                 } else {
-                    blocks.push({ type: 'text', text: OPEN_TAG + jsonStr + CLOSE_TAG });
+                    blocks.push({ type: 'text', text: this.marker.open + payload + this.marker.close });
                 }
-                this.inToolCall = false;
+                this.marker = null;
             } else {
-                const startIdx = this.buffer.indexOf(OPEN_TAG);
-                if (startIdx === -1) {
-                    const lastLt = this.buffer.lastIndexOf('<');
-                    if (lastLt !== -1) {
-                        const tail = this.buffer.substring(lastLt);
-                        if (OPEN_TAG.startsWith(tail)) {
-                            if (lastLt > 0) {
-                                blocks.push({ type: 'text', text: this.buffer.substring(0, lastLt) });
-                            }
-                            this.buffer = tail;
+                const candidates = [];
+                for (const marker of TOOL_MARKERS) {
+                    const startIdx = this.buffer.indexOf(marker.open);
+                    if (startIdx !== -1) candidates.push({ startIdx, marker });
+                }
+                candidates.sort((a, b) => a.startIdx - b.startIdx);
+                const candidate = candidates[0];
+
+                if (!candidate) {
+                    // Keep a possible partial opener in the buffer. Check every
+                    // '<' and '[' so UTF-8/chunk boundaries cannot split a tag.
+                    let holdFrom = this.buffer.length;
+                    for (let i = this.buffer.length - 1; i >= 0; i--) {
+                        const ch = this.buffer[i];
+                        if (ch !== '<' && ch !== '[') continue;
+                        const tail = this.buffer.substring(i);
+                        if (TOOL_MARKERS.some(marker => marker.open.startsWith(tail))) {
+                            holdFrom = i;
                             break;
                         }
                     }
-                    if (this.buffer) {
-                        blocks.push({ type: 'text', text: this.buffer });
+                    if (holdFrom > 0) {
+                        blocks.push({ type: 'text', text: this.buffer.substring(0, holdFrom) });
                     }
-                    this.buffer = '';
+                    this.buffer = this.buffer.substring(holdFrom);
                     break;
                 }
-                if (startIdx > 0) {
-                    blocks.push({ type: 'text', text: this.buffer.substring(0, startIdx) });
+
+                if (candidate.startIdx > 0) {
+                    blocks.push({ type: 'text', text: this.buffer.substring(0, candidate.startIdx) });
                 }
-                this.buffer = this.buffer.substring(startIdx + OPEN_TAG.length);
-                this.inToolCall = true;
+                this.buffer = this.buffer.substring(candidate.startIdx + candidate.marker.open.length);
+                this.marker = candidate.marker;
             }
         }
         return blocks;
@@ -150,16 +191,27 @@ class StreamingToolCallParser {
 
     flush() {
         const blocks = [];
-        if (this.inToolCall) {
-            blocks.push({ type: 'text', text: OPEN_TAG + this.buffer });
+        if (this.marker) {
+            blocks.push({ type: 'text', text: this.marker.open + this.buffer });
             this.buffer = '';
-            this.inToolCall = false;
+            this.marker = null;
         } else if (this.buffer) {
             blocks.push({ type: 'text', text: this.buffer });
             this.buffer = '';
         }
         return blocks;
     }
+}
+
+function estimateTokens(text) {
+    if (!text) return 0;
+    let tokens = 0;
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (code > 0x2000) tokens += 1.5;
+        else tokens += 0.25;
+    }
+    return Math.ceil(tokens);
 }
 
 async function handleAnthropicResponse(fetchResponse, model, stream, inputTokens) {
@@ -421,4 +473,4 @@ async function* streamGenerator(fetchResponse, model, inputTokens) {
     }
 }
 
-module.exports = { handleAnthropicResponse, parseToolCalls, normalizeToolCallPayload, estimateTokens };
+module.exports = { handleAnthropicResponse, parseToolCalls, normalizeToolCallPayload, estimateTokens, StreamingToolCallParser };
