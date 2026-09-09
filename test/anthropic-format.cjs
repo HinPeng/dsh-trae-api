@@ -17,3 +17,10 @@ test('normalizes nonstandard name-only tool call syntax', () => {
     { type: 'tool_use', name: 'Bash', input: { command: 'ls', description: 'List files' } },
   ]);
 });
+
+test('normalizes tool wrapper syntax', () => {
+  const text = '[[TOOL_CALL]]\n[[tool_bash]]\n{"command":"ls","description":"List files"}[[/TOOL_CALL]]';
+  assert.deepEqual(parseToolCalls(text), [
+    { type: 'tool_use', name: 'Bash', input: { command: 'ls', description: 'List files' } },
+  ]);
+});

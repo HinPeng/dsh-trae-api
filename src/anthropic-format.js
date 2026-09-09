@@ -50,6 +50,17 @@ function normalizeToolCallPayload(raw) {
         } catch {}
     }
 
+    // Handle model-invented wrappers such as [[tool_bash]] followed by args.
+    const wrapperMatch = compact.match(/^\[\[tool[_-]([^\]]+)\]\]\s*(\{[\s\S]*\})$/i);
+    if (wrapperMatch) {
+        const name = wrapperMatch[1]
+            .replace(/(^.|[_-][a-z])/g, c => c.toUpperCase())
+            .replace(/[_-]/g, '');
+        try {
+            return { name, input: JSON.parse(wrapperMatch[2]) };
+        } catch {}
+    }
+
     return null;
 }
 
