@@ -3,7 +3,7 @@
  *
  * Supports:
  *   - text content block
- *   - tool_use content block (parsed from <tool_call>...</tool_call>)
+ *   - tool_use content block (parsed from [[TOOL_CALL]]...[[/TOOL_CALL]])
  *   - ping event (Anthropic official streaming spec)
  *   - stop_reason = tool_use when tool calls detected
  *   - token usage estimation
@@ -11,8 +11,8 @@
 
 const { v4: uuidv4 } = require('uuid');
 
-const OPEN_TAG = '<tool_call>';
-const CLOSE_TAG = '</tool_call>';
+const OPEN_TAG = '[[TOOL_CALL]]';
+const CLOSE_TAG = '[[/TOOL_CALL]]';
 
 function estimateTokens(text) {
     if (!text) return 0;
@@ -27,7 +27,7 @@ function estimateTokens(text) {
 
 function parseToolCalls(text) {
     const result = [];
-    const regex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+    const regex = /\[\[TOOL_CALL\]\]\s*([\s\S]*?)\s*\[\[\/TOOL_CALL\]\]/g;
     let lastIndex = 0;
     let match;
 

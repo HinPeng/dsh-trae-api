@@ -91,7 +91,8 @@ function cleanContent(text) {
 function toolsToSystemPrompt(tools) {
   if (!tools || !Array.isArray(tools) || tools.length === 0) return '';
   const lines = ['You have access to the following tools. To use a tool, output EXACTLY this format:', '',
-    '<tool_call>', '{"name": "tool_name", "arguments": {"param": "value"}}', '</tool_call>', '',
+    '[[TOOL_CALL]]', '{"name": "tool_name", "arguments": {"param": "value"}}', '[[/TOOL_CALL]]', '',
+    'Use one complete block per tool. After receiving a tool result, continue the next step until the task is complete.', '',
     'Available tools:'];
 
   for (const tool of tools) {
