@@ -71,7 +71,7 @@ async function sendChatRequest(messages, requested, stream, unusedBase, options 
   const auth = readAuth(); const c = selectModel(await configs(auth), requested); const id = randomUUID();
   const body = { model_name: c.model_detail_list[0].model_name, config_name: c.config_name, user_input: '', conversation_id: id, session_id: id, messages: messages.map(m => ({ ...m, content: typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content })), stream: true };
   if (options.maxTokens) body.max_tokens = options.maxTokens;
-  const r = await fetch(`${BASE_URL}/api/ide/v2/llm_raw_chat`, { method: 'POST', headers: headers(auth), body: JSON.stringify(body), signal: AbortSignal.timeout(120000), redirect: 'error' });
+  const r = await fetch(`${BASE_URL}/api/ide/v2/llm_raw_chat`, { method: 'POST', headers: headers(auth), body: JSON.stringify(body), signal: AbortSignal.timeout(Number(process.env.TRAE_REQUEST_TIMEOUT_MS || 600000)), redirect: 'error' });
   if (!r.ok) throw failure(`TRAE enterprise HTTP ${r.status}`, r.status);
   const iterator = validatedEvents(r.body); const encoder = new TextEncoder();
   const response = new Response(new ReadableStream({

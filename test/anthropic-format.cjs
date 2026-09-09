@@ -10,3 +10,10 @@ test('parses square-bracket tool calls emitted by the prompt', () => {
     { type: 'text', text: '\nThen continuing.' },
   ]);
 });
+
+test('normalizes nonstandard name-only tool call syntax', () => {
+  const text = '[[TOOL_CALL]]{"Bash"}\n{"command":"ls","description":"List files"}[[/TOOL_CALL]]';
+  assert.deepEqual(parseToolCalls(text), [
+    { type: 'tool_use', name: 'Bash', input: { command: 'ls', description: 'List files' } },
+  ]);
+});

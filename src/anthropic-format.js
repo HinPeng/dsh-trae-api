@@ -25,6 +25,34 @@ function estimateTokens(text) {
     return Math.ceil(tokens);
 }
 
+function normalizeToolCallPayload(raw) {
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.name === 'string') {
+            return { name: parsed.name, input: parsed.arguments || parsed.input || parsed.parameters || {} };
+        }
+    } catch {}
+
+    // Some models output `{"ToolName"}` followed by an arguments object.
+    // Normalize both common variants before giving up.
+    const compact = raw.replace(/\s+/g, ' ').trim();
+    const match = compact.match(/^\{\s*"([^"]+)"\s*\}\s*(\{[\s\S]*\})$/);
+    if (match) {
+        try {
+            return { name: match[1], input: JSON.parse(match[2]) };
+        } catch {}
+    }
+
+    const argMatch = compact.match(/^\{\s*"([^"]+)"\s*"\s*:\s*(\{[\s\S]*\})\s*\}$/);
+    if (argMatch) {
+        try {
+            return { name: argMatch[1], input: JSON.parse(argMatch[2]) };
+        } catch {}
+    }
+
+    return null;
+}
+
 function parseToolCalls(text) {
     const result = [];
     const regex = /\[\[TOOL_CALL\]\]\s*([\s\S]*?)\s*\[\[\/TOOL_CALL\]\]/g;
@@ -36,18 +64,10 @@ function parseToolCalls(text) {
             const before = text.substring(lastIndex, match.index);
             if (before.trim()) result.push({ type: 'text', text: before });
         }
-        try {
-            const parsed = JSON.parse(match[1]);
-            if (parsed.name) {
-                result.push({
-                    type: 'tool_use',
-                    name: parsed.name,
-                    input: parsed.arguments || parsed.input || parsed.parameters || {},
-                });
-            } else {
-                result.push({ type: 'text', text: match[0] });
-            }
-        } catch (e) {
+        const parsed = normalizeToolCallPayload(match[1]);
+        if (parsed) {
+            result.push({ type: 'tool_use', name: parsed.name, input: parsed.input });
+        } else {
             result.push({ type: 'text', text: match[0] });
         }
         lastIndex = regex.lastIndex;
@@ -80,18 +100,10 @@ class StreamingToolCallParser {
                 if (endIdx === -1) break;
                 const jsonStr = this.buffer.substring(0, endIdx).trim();
                 this.buffer = this.buffer.substring(endIdx + CLOSE_TAG.length);
-                try {
-                    const parsed = JSON.parse(jsonStr);
-                    if (parsed.name) {
-                        blocks.push({
-                            type: 'tool_use',
-                            name: parsed.name,
-                            input: parsed.arguments || parsed.input || parsed.parameters || {},
-                        });
-                    } else {
-                        blocks.push({ type: 'text', text: OPEN_TAG + jsonStr + CLOSE_TAG });
-                    }
-                } catch (e) {
+                const parsed = normalizeToolCallPayload(jsonStr);
+                if (parsed) {
+                    blocks.push({ type: 'tool_use', name: parsed.name, input: parsed.input });
+                } else {
                     blocks.push({ type: 'text', text: OPEN_TAG + jsonStr + CLOSE_TAG });
                 }
                 this.inToolCall = false;
@@ -398,4 +410,4 @@ async function* streamGenerator(fetchResponse, model, inputTokens) {
     }
 }
 
-module.exports = { handleAnthropicResponse, parseToolCalls, estimateTokens };
+module.exports = { handleAnthropicResponse, parseToolCalls, normalizeToolCallPayload, estimateTokens };
