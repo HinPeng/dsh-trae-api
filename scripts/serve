@@ -54,26 +54,49 @@ do_start() {
 }
 
 do_stop() {
-  if ! is_running; then
+  # Collect PIDs from the pid file and from the port (covers processes
+  # started outside this script, e.g. via npm start)
+  PIDS=""
+  if is_running; then
+    PIDS="$(cat "$PID_FILE")"
+  else
     rm -f "$PID_FILE"
-    echo "[serve] Not running (no valid PID file)"
+  fi
+  P="$(port)"
+  PORT_PIDS="$(lsof -ti :"$P" 2>/dev/null || true)"
+  if [ -n "$PORT_PIDS" ]; then
+    if [ -n "$PIDS" ]; then
+      PIDS="$(printf '%s\n%s\n' "$PIDS" "$PORT_PIDS" | sort -u)"
+    else
+      PIDS="$PORT_PIDS"
+    fi
+  fi
+  if [ -z "$PIDS" ]; then
+    echo "[serve] Not running"
     return 0
   fi
-  PID="$(cat "$PID_FILE")"
-  echo "[serve] Stopping PID $PID"
-  kill "$PID" 2>/dev/null || true
+  echo "[serve] Stopping PID $PIDS"
+  printf '%s\n' $PIDS | xargs kill 2>/dev/null || true
   sleep 1
-  if kill -0 "$PID" 2>/dev/null; then
-    echo "[serve] Force killing PID $PID"
-    kill -9 "$PID" 2>/dev/null || true
+  REMAINING=""
+  for pid in $PIDS; do
+    if kill -0 "$pid" 2>/dev/null; then
+      REMAINING="$REMAINING $pid"
+    fi
+  done
+  if [ -n "$REMAINING" ]; then
+    echo "[serve] Force killing PID:$REMAINING"
+    printf '%s\n' $REMAINING | xargs kill -9 2>/dev/null || true
   fi
-  rm -f "$PID_FILE"
   echo "[serve] Stopped"
 }
 
 do_status() {
+  P="$(port)"
   if is_running; then
     echo "[serve] Running (PID $(cat "$PID_FILE"))"
+  elif [ -n "$(lsof -ti :"$P" 2>/dev/null || true)" ]; then
+    echo "[serve] Running on port $P (not started by this script)"
   else
     rm -f "$PID_FILE"
     echo "[serve] Not running"
